@@ -8,6 +8,7 @@ This script demonstrates:
 3. Loading and displaying device information
 """
 
+from time import sleep
 import sys
 import logging
 from pathlib import Path
@@ -25,6 +26,7 @@ sys.path.insert(0, str(secrets_path))
 
 try:
     import credentials
+
     USERNAME = credentials.USERNAME
     PASSWORD = credentials.PASSWORD
     AUTH_TOKEN = credentials.AUTH_TOKEN
@@ -35,71 +37,81 @@ except ImportError:
     sys.exit(1)
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 
 def test_with_login():
     """Test authentication using username/password with login."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("Testing with username/password (requires login)")
-    print("="*60)
-    
+    print("=" * 60)
+
     dreo = PyDreo(username=USERNAME, password=PASSWORD)
     dreo.redact = False
     dreo.login()
-    
+
     print(f"Token from login: {dreo.token}")
-    
+
     dreo.load_devices()
-    
+
     if dreo.devices:
         print(f"\nFound {len(dreo.devices)} device(s):")
         for i, device in enumerate(dreo.devices):
-            device_type = getattr(device, 'device_type', getattr(device, 'device_name', 'Unknown'))
+            device_type = getattr(
+                device, "device_type", getattr(device, "device_name", "Unknown")
+            )
             print(f"  [{i}] {device.name} ({device_type})")
-            if hasattr(device, 'speed_range'):
+            if hasattr(device, "speed_range"):
                 print(f"      Speed Range: {device.speed_range}")
     else:
         print("\nNo devices found")
-    
+
     return dreo
 
 
 def test_with_token():
     """Test authentication using token (skips login)."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("Testing with token (skips login)")
-    print("="*60)
-    
-    dreo = PyDreo(token=AUTH_TOKEN)
+    print("=" * 60)
+
+    dreo = PyDreo(username=USERNAME, password=PASSWORD, token=AUTH_TOKEN)
     dreo.redact = False
-    
+
     print(f"Token: {dreo.token}")
-    print(f"Cloud client authenticated: {dreo._cloud_client.is_authenticated}")
-    
+    dreo.login()
+    print(f"Enabled: {dreo.enabled}")
+
     dreo.load_devices()
-    
+
     if dreo.devices:
         print(f"\nFound {len(dreo.devices)} device(s):")
         for i, device in enumerate(dreo.devices):
-            device_type = getattr(device, 'device_type', getattr(device, 'device_name', 'Unknown'))
+            device_type = getattr(
+                device, "device_type", getattr(device, "device_name", "Unknown")
+            )
             print(f"  [{i}] {device.name} ({device_type})")
-            if hasattr(device, 'speed_range'):
+            if hasattr(device, "speed_range"):
                 print(f"      Speed Range: {device.speed_range}")
     else:
         print("\nNo devices found")
-    
+
     return dreo
 
 
 if __name__ == "__main__":
     # Choose which method to test:
-    
+
     # Method 1: Login with username/password
-    dreo = test_with_login()
-    
+    # dreo = test_with_login()
+
     # Method 2: Use token directly (uncomment to test)
-    # dreo = test_with_token()
-    
+    dreo = test_with_token()
+
     # Additional testing can be done here with the dreo instance
     # Example: dreo.devices[0].is_on = True
+    dreo.start_transport()
+    sleep(2)
+    dreo.devices[1].is_on = True
