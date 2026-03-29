@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Generate E2E test data by combining device JSON files."""
 import json
-import os
 import shutil
 from pathlib import Path
 
@@ -31,7 +30,7 @@ def main():
     combined_devices = []
     
     for file_path in device_files:
-        with open(file_path, 'r') as f:
+        with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
             
         # Extract the device list from each file
@@ -56,10 +55,10 @@ def main():
     
     # Write combined file
     output_file = E2E_TEST_DATA_DIR / "get_devices.json"
-    with open(output_file, 'w') as f:
+    with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(combined_data, f, indent=2)
     
-    print(f"\n✓ Created {output_file} with {len(combined_devices)} devices")
+    print(f"\nCreated {output_file} with {len(combined_devices)} devices")
     
     # Clean existing state files in destination
     existing_state_files = list(E2E_TEST_DATA_DIR.glob("get_device_state_*.json"))
@@ -67,7 +66,7 @@ def main():
         print(f"\nCleaning {len(existing_state_files)} existing state files:")
         for file_path in existing_state_files:
             file_path.unlink()
-            print(f"  ✓ Deleted {file_path.name}")
+            print(f"  Deleted {file_path.name}")
     
     # Clean existing settings files in destination
     existing_setting_files = list(E2E_TEST_DATA_DIR.glob("get_device_setting_*.json"))
@@ -75,7 +74,7 @@ def main():
         print(f"\nCleaning {len(existing_setting_files)} existing setting files:")
         for file_path in existing_setting_files:
             file_path.unlink()
-            print(f"  ✓ Deleted {file_path.name}")
+            print(f"  Deleted {file_path.name}")
 
     # Copy all get_device_state files
     state_files = list(API_RESPONSES_DIR.glob("get_device_state_*.json"))
@@ -85,7 +84,7 @@ def main():
     for file_path in state_files:
         dest_path = E2E_TEST_DATA_DIR / file_path.name
         shutil.copy2(file_path, dest_path)
-        print(f"  ✓ Copied {file_path.name}")
+        print(f"  Copied {file_path.name}")
 
     # Copy all get_device_settings files
     setting_files = list(API_RESPONSES_DIR.glob("get_device_setting_*.json"))
@@ -95,10 +94,10 @@ def main():
     for file_path in setting_files:
         dest_path = E2E_TEST_DATA_DIR / file_path.name
         shutil.copy2(file_path, dest_path)
-        print(f"  ✓ Copied {file_path.name}")
+        print(f"  Copied {file_path.name}")
     
-    print(f"\n✓ Done! Generated E2E test data in {E2E_TEST_DATA_DIR}")
-    print(f"  - 1 combined get_devices.json file")
+    print(f"\nDone! Generated E2E test data in {E2E_TEST_DATA_DIR}")
+    print("  - 1 combined get_devices.json file")
     print(f"  - {len(state_files)} get_device_state files")
     print(f"  - {len(setting_files)} get_device_setting files")
 

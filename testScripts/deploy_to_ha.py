@@ -9,12 +9,10 @@ This script:
 5. On Windows: uses robocopy (TBD)
 """
 import argparse
-import os
 import platform
 import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 # Paths
@@ -36,7 +34,7 @@ def enable_debug_mode():
     """Uncomment DEBUG_TEST_MODE = True in const_debug_test_mode.py."""
     print("Enabling DEBUG_TEST_MODE...")
     
-    with open(CONST_DEBUG_FILE, 'r') as f:
+    with open(CONST_DEBUG_FILE, 'r', encoding='utf-8') as f:
         content = f.read()
     
     # Uncomment the line if it's commented
@@ -45,17 +43,17 @@ def enable_debug_mode():
         "DEBUG_TEST_MODE = True"
     )
     
-    with open(CONST_DEBUG_FILE, 'w') as f:
+    with open(CONST_DEBUG_FILE, 'w', encoding='utf-8') as f:
         f.write(modified_content)
     
-    print("✓ DEBUG_TEST_MODE enabled")
+    print("DEBUG_TEST_MODE enabled")
 
 
 def disable_debug_mode():
     """Comment out DEBUG_TEST_MODE = True in const_debug_test_mode.py."""
     print("Disabling DEBUG_TEST_MODE...")
     
-    with open(CONST_DEBUG_FILE, 'r') as f:
+    with open(CONST_DEBUG_FILE, 'r', encoding='utf-8') as f:
         content = f.read()
     
     # Find and comment the line if it's uncommented
@@ -64,20 +62,16 @@ def disable_debug_mode():
     
     for line in lines:
         if line.strip() == "DEBUG_TEST_MODE = True" and not line.strip().startswith("#"):
-            # Check if previous line is already a comment about uncommenting
-            if modified_lines and "Uncomment to enable" in modified_lines[-1]:
-                modified_lines.append("# " + line)
-            else:
-                modified_lines.append("# " + line)
+            modified_lines.append("# " + line)
         else:
             modified_lines.append(line)
     
     modified_content = '\n'.join(modified_lines)
     
-    with open(CONST_DEBUG_FILE, 'w') as f:
+    with open(CONST_DEBUG_FILE, 'w', encoding='utf-8') as f:
         f.write(modified_content)
     
-    print("✓ DEBUG_TEST_MODE disabled")
+    print("DEBUG_TEST_MODE disabled")
 
 
 def generate_e2e_test_data():
@@ -88,7 +82,8 @@ def generate_e2e_test_data():
     result = subprocess.run(
         [sys.executable, str(GENERATE_SCRIPT)],
         capture_output=True,
-        text=True
+        text=True,
+        check=False
     )
     
     if result.returncode != 0:
@@ -106,12 +101,12 @@ def generate_e2e_test_data():
     shutil.copytree(TEMP_E2E_DATA_DIR, TARGET_E2E_DATA_DIR)
     
     file_count = len(list(TARGET_E2E_DATA_DIR.glob("*.json")))
-    print(f"✓ Copied {file_count} files to target directory")
+    print(f"Copied {file_count} files to target directory")
     
     return True
 
 
-def deploy_mac(ha_path, debug_mode):
+def deploy_mac(ha_path):
     """Deploy to HA instance on macOS using rsync."""
     print(f"\nDeploying to {ha_path}...")
     
@@ -134,7 +129,7 @@ def deploy_mac(ha_path, debug_mode):
     try:
         result = subprocess.run(cmd, check=True, capture_output=True, text=True)
         print(result.stdout)
-        print("✓ Deployment successful")
+        print("Deployment successful")
         return True
     except subprocess.CalledProcessError as e:
         print(f"Error during rsync: {e.stderr}")
@@ -144,10 +139,57 @@ def deploy_mac(ha_path, debug_mode):
 def deploy_windows(ha_path):
     """Deploy to HA instance on Windows using robocopy."""
     print(f"\nDeploying to {ha_path}...")
-    print("⚠ Windows deployment with robocopy is not yet implemented (TBD)")
-    print("You can manually copy the files from:")
-    print(f"  {CUSTOM_COMPONENTS_SRC}")
-    print(f"To: {ha_path}")
+
+    cmd = [
+        "robocopy",
+        str(CUSTOM_COMPONENTS_SRC),
+        ha_path,
+        "/MIR",
+        "/XD", "__pycache__",
+        "/XF", ".*",
+        "/NFL", "/NDL", "/NJH", "/NJS"
+    ]
+
+    print(f"Running: {' '.join(cmd)}")
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        if result.returncode >= 8:
+            print(f"Error during robocopy (exit code {result.returncode}): {result.stderr}")
+            return False
+        print(result.stdout)
+        print("Deployment successful")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"Error during robocopy: {e.stderr}")
+        return False
+
+
+def resolve_ha_path(args):
+    """Determine the HA deployment path based on args and OS."""
+    if args.ha_path:
+        return args.ha_path
+
+    system = platform.system()
+    if system == "Darwin":
+        return DEFAULT_HA_PATH_MAC
+    if system == "Windows":
+        if DEFAULT_HA_PATH_WINDOWS:
+            return DEFAULT_HA_PATH_WINDOWS
+        print("Error: Please specify --ha-path for Windows deployment")
+        return None
+
+    print(f"Error: Unsupported OS: {system}")
+    return None
+
+
+def deploy(ha_path):
+    """Deploy to the appropriate OS target."""
+    system = platform.system()
+    if system == "Darwin":
+        return deploy_mac(ha_path)
+    if system == "Windows":
+        return deploy_windows(ha_path)
     return False
 
 
@@ -174,22 +216,11 @@ def main():
     
     args = parser.parse_args()
     
-    # Detect OS
     system = platform.system()
     print(f"Detected OS: {system}")
     
-    # Determine HA path
-    if args.ha_path:
-        ha_path = args.ha_path
-    elif system == "Darwin":  # macOS
-        ha_path = DEFAULT_HA_PATH_MAC
-    elif system == "Windows":
-        ha_path = DEFAULT_HA_PATH_WINDOWS
-        if not ha_path:
-            print("Error: Please specify --ha-path for Windows deployment")
-            return 1
-    else:
-        print(f"Error: Unsupported OS: {system}")
+    ha_path = resolve_ha_path(args)
+    if ha_path is None:
         return 1
     
     # Validate HA path exists
@@ -201,35 +232,27 @@ def main():
     success = True
     
     try:
-        # Enable debug mode if requested
         if args.debug:
             enable_debug_mode()
         
-        # Generate E2E test data
         if not args.skip_generate:
             if not generate_e2e_test_data():
                 print("Warning: E2E test data generation failed")
                 success = False
         
-        # Deploy based on OS
-        if system == "Darwin":
-            if not deploy_mac(ha_path, args.debug):
-                success = False
-        elif system == "Windows":
-            if not deploy_windows(ha_path):
-                success = False
+        if not deploy(ha_path):
+            success = False
         
     finally:
-        # Always disable debug mode when done (restore to safe state)
         if args.debug:
             disable_debug_mode()
     
     if success:
-        print("\n✓ All deployment steps completed successfully")
+        print("\nAll deployment steps completed successfully")
         return 0
-    else:
-        print("\n⚠ Deployment completed with warnings or errors")
-        return 1
+
+    print("\nDeployment completed with warnings or errors")
+    return 1
 
 
 if __name__ == "__main__":
